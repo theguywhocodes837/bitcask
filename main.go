@@ -9,7 +9,10 @@ import (
 	"time"
 )
 
-const HEADER_SIZE = 13
+const (
+	HEADER_SIZE       = 13
+	TOMBSTONRE_OFFSET = -1
+)
 
 type Record struct {
 	Key       []byte
@@ -38,7 +41,41 @@ func Open(filename string) (*Store, error) {
 		index:    make(map[string]int64),
 	}
 
+	err = store.buildIndex()
+	if err != nil {
+		file.Close()
+		return nil, fmt.Errorf("failed to rebuild index: %w", err)
+	}
+
 	return store, nil
+}
+
+func (s *Store) buildIndex() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var offset int64
+
+	for {
+		record, err := s.readRecord(offset)
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			return fmt.Errorf("failed to read record: %w", err)
+		}
+
+		if record.Tombstone {
+			s.index[string(record.Key)] = TOMBSTONRE_OFFSET
+		} else {
+			s.index[string(record.Value)] = offset
+		}
+
+		offset = int64(HEADER_SIZE + len(record.Key) + len(record.Value))
+	}
+
+	return nil
 }
 
 func (s *Store) readRecord(offset int64) (*Record, error) {
