@@ -184,3 +184,33 @@ func (s *Store) Put(key, value []byte) error {
 	s.index[string(key)] = offset
 	return nil
 }
+
+func (s *Store) Get(key []byte) ([]byte, error) {
+	if len(key) == 0 {
+		return nil, fmt.Errorf("key can not be empty")
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	offset, exists := s.index[string(key)]
+
+	if !exists || offset == TOMBSTONRE_OFFSET {
+		return nil, fmt.Errorf("key not found: %s", key)
+	}
+
+	record, err := s.readRecord(offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read record: %w", err)
+	}
+
+	return record.Value, nil
+}
+
+func main() {
+	store, _ := Open("store.db")
+
+	_ = store.Put([]byte("os"), []byte("mac"))
+	_ = store.Put([]byte("db"), []byte("kv"))
+	_ = store.Put([]byte("lang"), []byte("go"))
+}
