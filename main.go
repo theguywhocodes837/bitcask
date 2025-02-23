@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"time"
 )
 
 const HEADER_SIZE = 13
@@ -122,4 +123,27 @@ func (s *Store) writeRecord(record *Record) (int64, error) {
 	}
 
 	return offset, nil
+}
+
+func (s *Store) Put(key, value []byte) error {
+	if len(key) == 0 {
+		return fmt.Errorf("key can not be empty")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	record := &Record{
+		Key:       key,
+		Value:     value,
+		Timestamp: uint32(time.Now().Unix()),
+	}
+
+	offset, err := s.writeRecord(record)
+	if err != nil {
+		return fmt.Errorf("failed to write record: %w", err)
+	}
+
+	s.index[string(key)] = offset
+	return nil
 }
